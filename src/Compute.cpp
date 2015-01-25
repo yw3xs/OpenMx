@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <stdarg.h>
+#include <limits>
 
 //#include <iostream>
 
@@ -2785,15 +2786,27 @@ void ComputeReportDeriv::reportResults(FitContext *fc, MxRList *, MxRList *resul
 
 // ------------------------------------------------------------
 
-void GradientOptimizerContext::setupIneqConstraintBounds()
+void GradientOptimizerContext::copyBounds()
 {
-	solLB.resize(fc->numParam);
-	solUB.resize(fc->numParam);
 	FreeVarGroup *varGroup = fc->varGroup;
 	for(int index = 0; index < int(fc->numParam); index++) {
 		solLB[index] = varGroup->vars[index]->lbound;
 		solUB[index] = varGroup->vars[index]->ubound;
 	}
+}
+
+void GradientOptimizerContext::setupSimpleBounds()
+{
+	solLB.resize(fc->numParam);
+	solUB.resize(fc->numParam);
+	copyBounds();
+}
+
+void GradientOptimizerContext::setupIneqConstraintBounds()
+{
+	solLB.resize(fc->numParam);
+	solUB.resize(fc->numParam);
+	copyBounds();
 
 	omxState *globalState = fc->state;
 	int eqn = 0;
@@ -2834,10 +2847,7 @@ void GradientOptimizerContext::setupAllBounds()
 	solLB.resize(n + globalState->ncnln);
 	solUB.resize(n + globalState->ncnln);
 
-	for(int index = 0; index < n; index++) {
-		solLB[index] = freeVarGroup->vars[index]->lbound;
-		solUB[index] = freeVarGroup->vars[index]->ubound;
-	}
+	copyBounds();
 
 	int index = n;
 	for(int constraintIndex = 0; constraintIndex < globalState->numConstraints; constraintIndex++) {
@@ -2878,6 +2888,7 @@ GradientOptimizerContext::GradientOptimizerContext(int verbose)
 	useGradient = false;
 	warmStart = false;
 	bestFit = std::numeric_limits<double>::max();
+	feasible = false;
 }
 
 double GradientOptimizerContext::recordFit(double *myPars, int* mode)
@@ -2907,6 +2918,7 @@ double GradientOptimizerContext::solFun(double *myPars, int* mode)
 	if (!std::isfinite(fc->fit) || isErrorRaised()) {
 		*mode = -1;
 	}
+	feasible = true;
 
 	return fc->fit;
 };
@@ -2989,13 +3001,20 @@ double ConfidenceIntervalFit::solFun(double *myPars, int* mode)
 		return fc->fit;
 	}
 
+	double diff = (calcLower? oCI->lbound : oCI->ubound) - fc->fit;
+	diff *= diff;
+
+	if (diff > 1e6) {
+		// Ensure there aren't any creative solutions
+		fc->fit = std::numeric_limits<double>::max();
+		return fc->fit;
+	}
+
 	if(calcLower) {
-		double diff = oCI->lbound - fc->fit;		// Offset - likelihood
-		fc->fit = diff * diff + CIElement;
+		fc->fit = diff + CIElement;
 		// Minimize element for lower bound.
 	} else {
-		double diff = oCI->ubound - fc->fit;			// Offset - likelihood
-		fc->fit = diff * diff - CIElement;
+		fc->fit = diff - CIElement;
 		// Maximize element for upper bound.
 	}
 

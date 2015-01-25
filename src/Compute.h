@@ -204,9 +204,15 @@ void omxApproxInvertPosDefTriangular(int dim, double *hess, double *ihess, doubl
 void omxApproxInvertPackedPosDefTriangular(int dim, int *mask, double *packedHess, double *stress);
 SEXP sparseInvert_wrapper(SEXP mat);
 
-struct GradientOptimizerContext {
+class GradientOptimizerContext {
+ private:
+	void copyBounds();
+
+ public:
 	const int verbose;
 	const char *optName;  // filled in by the optimizer
+	bool feasible;
+	void *extraData;
 	FitContext *fc;
 	omxMatrix *fitMatrix;
 
@@ -224,6 +230,7 @@ struct GradientOptimizerContext {
 	Eigen::VectorXd solIneqLB;
 	Eigen::VectorXd solIneqUB;
 
+	// TODO remove, better to pass as a parameter so we can avoid copies
 	Eigen::VectorXd equality;
 	Eigen::VectorXd inequality;
 
@@ -239,6 +246,7 @@ struct GradientOptimizerContext {
 
 	GradientOptimizerContext(int verbose);
 
+	void setupSimpleBounds();          // NLOPT style
 	void setupIneqConstraintBounds();  // CSOLNP style
 	void setupAllBounds();             // NPSOL style
 
