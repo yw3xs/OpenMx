@@ -2815,18 +2815,9 @@ void GradientOptimizerContext::setupIneqConstraintBounds()
 		omxConstraint &con = globalState->conList[j];
 		if (con.size == 0 || con.opCode == omxConstraint::EQUALITY) continue;
 
-		double lb, ub;
-		if (con.opCode == omxConstraint::LESS_THAN) {
-			lb = NEG_INF;
-			ub = -0.0;
-		} else {
-			lb = 0.0;
-			ub = INF;
-		}
-
 		for (int en=0; en < con.size; ++en) {
-			solIneqLB[cur+en] = lb;
-			solIneqUB[cur+en] = ub;
+			solIneqLB[cur+en] = NEG_INF;
+			solIneqUB[cur+en] = -0.0;
 		}
 
 		cur += con.size;
@@ -2853,6 +2844,7 @@ void GradientOptimizerContext::setupAllBounds()
 		omxConstraint::Type type = globalState->conList[constraintIndex].opCode;
 		switch(type) {
 		case omxConstraint::LESS_THAN:
+		case omxConstraint::GREATER_THAN:
 			for(int offset = 0; offset < globalState->conList[constraintIndex].size; offset++) {
 				solLB[index] = NEG_INF;
 				solUB[index] = -0.0;
@@ -2863,14 +2855,6 @@ void GradientOptimizerContext::setupAllBounds()
 			for(int offset = 0; offset < globalState->conList[constraintIndex].size; offset++) {
 				solLB[index] = -0.0;
 				solUB[index] = 0.0;
-				index++;
-			}
-			break;
-		case omxConstraint::GREATER_THAN:
-			for(int offset = 0; offset < globalState->conList[constraintIndex].size; offset++) {
-				if(OMX_DEBUG) { mxLog("\tBounds set for constraint %d.%d.", constraintIndex, offset);}
-				solLB[index] = 0.0;
-				solUB[index] = INF;
 				index++;
 			}
 			break;
@@ -2975,7 +2959,9 @@ void GradientOptimizerContext::myineqFun()
 
 		omxRecompute(con.result, fc);
 		for(int k = 0; k < globalState->conList[j].size; k++){
-			inequality[cur] = con.result->data[k];
+			double got = con.result->data[k];
+			if (con.opCode == omxConstraint::GREATER_THAN) got = -got;
+			inequality[cur] = got;
 			++cur;
 		}
 	}
